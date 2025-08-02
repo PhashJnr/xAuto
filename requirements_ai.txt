@@ -1,0 +1,7 @@
+# AI Integration Dependencies
+openai>=1.0.0
+python-dotenv>=1.0.0
+requests>=2.25.0
+
+# Optional: For local models
+# ollama>=0.1.0  # Uncomment if using local models 
