@@ -270,11 +270,9 @@ Context: {tweet_context}
 
 Custom Instructions: {custom_prompt}
 
-Generate a brief, natural reply (180-280 characters) that:
+Generate a brief, natural reply ({min_chars}-{max_chars} characters) that:
 - Sounds like a real person, not AI
 - Uses casual, conversational language
-- Shows genuine interest or curiosity
-- Asks a relevant question or shares a thought
 - Uses natural contractions (you're, that's, etc.)
 - Avoids overly formal or perfect responses
 - Keeps it brief and to the point
@@ -288,11 +286,9 @@ Tweet: {tweet_content}
 
 Context: {tweet_context}
 
-Generate a brief, natural reply (180-280 characters) that:
+Generate a brief, natural reply ({min_chars}-{max_chars} characters) that:
 - Sounds like a real person, not AI
 - Uses casual, conversational language
-- Shows genuine interest or curiosity
-- Asks a relevant question or shares a thought
 - Uses natural contractions (you're, that's, etc.)
 - Avoids overly formal or perfect responses
 - Keeps it brief and to the point
@@ -304,7 +300,7 @@ Reply:"""
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a casual Twitter user who replies naturally and briefly. Use conversational language, show genuine interest, and keep responses concise (180-280 characters). No hashtags or emojis."},
+                    {"role": "system", "content": "You are a casual Twitter user who replies naturally and briefly. Use conversational language and keep responses between 180-280 characters. No hashtags or emojis."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=100,  # Reduced for brevity
@@ -370,8 +366,6 @@ Custom Instructions: {custom_prompt}
 Generate a brief, natural reply ({min_chars}-{max_chars} characters) that:
 - Sounds like a real person, not AI
 - Uses casual, conversational language
-- Shows genuine interest or curiosity
-- Asks a relevant question or shares a thought
 - Uses natural contractions (you're, that's, etc.)
 - Avoids overly formal or perfect responses
 - Keeps it brief and to the point
@@ -388,8 +382,6 @@ Context: {tweet_context}
 Generate a brief, natural reply ({min_chars}-{max_chars} characters) that:
 - Sounds like a real person, not AI
 - Uses casual, conversational language
-- Shows genuine interest or curiosity
-- Asks a relevant question or shares a thought
 - Uses natural contractions (you're, that's, etc.)
 - Avoids overly formal or perfect responses
 - Keeps it brief and to the point
@@ -401,7 +393,7 @@ Reply:"""
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": f"You are a casual Twitter user who replies naturally and briefly. Use conversational language, show genuine interest, and keep responses between {min_chars}-{max_chars} characters. No hashtags or emojis."},
+                    {"role": "system", "content": f"You are a casual Twitter user who replies naturally and briefly. Use conversational language and keep responses between {min_chars}-{max_chars} characters. No hashtags or emojis."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=100,  # Reduced for brevity

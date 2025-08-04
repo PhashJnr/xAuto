@@ -25,6 +25,18 @@ def cleanup_for_github():
         "proxy_*.py",
         "selenium_manager_old.py",
         
+        # Development test files
+        "test_auto_ui.py",
+        "test_attributerror_fix.py",
+        "test_contexts.py",
+        "test_enhanced_auto.py",
+        "test_logging.py",
+        "test_comprehensive_logging.py",
+        "test_auto_tab.py",
+        "test_fix.py",
+        "test_ui.py",
+        "test_foxyproxy.py",
+        
         # Sample files
         "sample_*.txt",
         "sample_*.json",
@@ -48,9 +60,6 @@ def cleanup_for_github():
         "ai_settings_state.json",
         "sample_ai_settings.json",
         
-        # Log files
-        "*.log",
-        
         # Build files
         "*.spec",
         "dist/",
@@ -59,19 +68,43 @@ def cleanup_for_github():
         # Driver files
         "geckodriver*",
         "chromedriver*",
+        
+        # Temporary files
+        "temp_*.py",
+        "tmp_*.py",
+        "*.tmp",
+        "*.bak",
+        "*.old",
+        
+        # Development artifacts
+        "create_proxy_plugin.py",
+        "install_socks_support.py",
+        "proxy_diagnostic.py",
+        "verify_proxy_credentials.py",
+        "test_isolated_browsers.py",
+        "test_chrome_isolation.py",
+        "setup_portable_chrome.py",
+        "test_profile_isolation.py",
+        "test_proxy_connection.py",
+        "test_proxy_parsing.py",
+        "test_proxy_fix.py",
+        "test_proxy_formats.py",
+        "proxy_troubleshooting.md",
+        "setup_proxy_extension.py",
+        "install_proxy_extension.py",
+        "persistent_proxy_setup.py",
+        "test_simple_proxy.py",
+        "debug_proxy_extension.py",
+        "test_browser_isolation.py",
+        "fix_proxy_parsing.py",
     ]
     
-    # Directories to remove
+    # Directories to remove (only those NOT in .gitignore)
     dirs_to_remove = [
-        "chrome_profiles/",
-        "cookies/",
-        "logs/",
-        "drivers/",
-        "chromium_portable/",
-        "chrome_portable/",
-        "firefox_profiles/",
-        "__pycache__/",
-        ".git/",
+        "temp/",
+        "tmp/",
+        "test_outputs/",
+        "debug_outputs/",
     ]
     
     removed_count = 0

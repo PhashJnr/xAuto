@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-from account_manager import load_accounts
+from account_manager import load_accounts, SeleniumAccount
 from gui.panels.dashboard_panel import DashboardPanel
 from gui.panels.reply_panel import ReplyPanel
 from gui.panels.dm_panel import DmPanel
@@ -13,7 +13,8 @@ from gui.panels.settings_panel import SettingsPanel
 from gui.panels.scheduled_tasks_panel import ScheduledTasksPanel
 from gui.panels.history_panel import HistoryPanel
 from gui.panels.reply_comment_panel import ReplyCommentPanel
-from selenium_manager import get_global_driver_manager
+from gui.panels.like_retweet_panel import LikeRetweetPanel
+from selenium_manager import get_global_driver_manager, cleanup_chrome_profile_cache
 
 class TwitterSeleniumGUI:
     def __init__(self, root):
@@ -22,10 +23,24 @@ class TwitterSeleniumGUI:
         self.accounts = load_accounts()
         self.panels = {}
         self.current_panel = None
+        
+        # Clean up existing Chrome profiles at startup
+        self._cleanup_existing_profiles()
+        
         self._setup_gui()
         
         # Set up proper cleanup on window close
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def _cleanup_existing_profiles(self):
+        """Clean up existing Chrome profiles with multiple cache directories"""
+        try:
+            print("🧹 Cleaning up existing Chrome profiles...")
+            for acc in self.accounts:
+                cleanup_chrome_profile_cache(acc)
+            print("✅ Chrome profile cleanup completed")
+        except Exception as e:
+            print(f"⚠️ Error during profile cleanup: {e}")
 
     def _setup_gui(self):
         self.root.geometry('1000x650')
@@ -38,6 +53,7 @@ class TwitterSeleniumGUI:
             ('Dashboard', self.show_dashboard),
             ('Reply to Tweet', self.show_reply),
             ('Reply to Comment', self.show_reply_comment),
+            ('Like and Retweet', self.show_like_retweet),
             ('Send DM', self.show_dm),
             ('Change Bio', self.show_bio),
             ('Change Profile Pic', self.show_profile_pic),
@@ -60,6 +76,7 @@ class TwitterSeleniumGUI:
         self.panels['dashboard'] = DashboardPanel(self.content)
         self.panels['reply'] = ReplyPanel(self.content, self.accounts)
         self.panels['reply_comment'] = ReplyCommentPanel(self.content, self.accounts)
+        self.panels['like_retweet'] = LikeRetweetPanel(self.content, self.accounts)
         self.panels['dm'] = DmPanel(self.content, self.accounts)
         self.panels['bio'] = BioPanel(self.content, self.accounts)
         self.panels['profile_pic'] = ProfilePicPanel(self.content, self.accounts)
@@ -94,6 +111,8 @@ class TwitterSeleniumGUI:
         self._show_panel('reply')
     def show_reply_comment(self):
         self._show_panel('reply_comment')
+    def show_like_retweet(self):
+        self._show_panel('like_retweet')
     def show_dm(self):
         self._show_panel('dm')
     def show_bio(self):
@@ -116,12 +135,12 @@ class TwitterSeleniumGUI:
     def on_closing(self):
         """Clean up resources before closing"""
         try:
-            # Close the global driver manager
+            # Close the global driver manager (this will save cookies for all accounts)
             driver_manager = get_global_driver_manager()
             driver_manager.close_driver()
-            print("✅ Browser driver closed successfully")
+            print("✅ Browser drivers closed and cookies saved successfully")
         except Exception as e:
-            print(f"⚠️ Error closing browser driver: {e}")
+            print(f"⚠️ Error closing browser drivers: {e}")
         
         # Destroy the window
         self.root.destroy()

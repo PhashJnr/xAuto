@@ -46,6 +46,8 @@ class AccountsPanel(ttk.Frame):
         ttk.Button(controls_frame, text="Check Status", command=self.check_selected_accounts_status).pack(side='left', padx=5)
         ttk.Button(controls_frame, text="Bulk Open", command=self.bulk_open_browsers).pack(side='left', padx=5)
         ttk.Button(controls_frame, text="Bulk Close", command=self.bulk_close_browsers).pack(side='left', padx=5)
+        ttk.Button(controls_frame, text="Verify Profiles", command=self.verify_all_profiles).pack(side='left', padx=5)
+        ttk.Button(controls_frame, text="Setup FoxyProxy", command=self.setup_foxyproxy_for_all).pack(side='left', padx=5)
         
         # Setup Proxies button (in controls frame so it doesn't get recreated)
         self.setup_proxies_btn = ttk.Button(controls_frame, text="Setup Proxies", command=self.setup_proxy_plugins)
@@ -222,6 +224,20 @@ class AccountsPanel(ttk.Frame):
                                  command=lambda a=acc: self.assign_proxy_to_account(a.label))
             proxy_btn.pack(side='left', padx=1)
             
+            # Save Cookies button (compact)
+            def save_cookies_for_account(account):
+                from selenium_manager import manual_save_cookies
+                self.log(f"💾 Manually saving cookies for {account.label}...")
+                success = manual_save_cookies(account)
+                if success:
+                    self.log(f"✅ Cookies saved for {account.label}")
+                else:
+                    self.log(f"❌ Failed to save cookies for {account.label}", is_error=True)
+            
+            save_cookies_btn = ttk.Button(actions_frame, text="💾", width=4,
+                                        command=lambda a=acc: save_cookies_for_account(a))
+            save_cookies_btn.pack(side='left', padx=1)
+            
             print(f"✅ Created browser button for account: {acc.label}")
             print(f"📊 Actions frame children count: {len(actions_frame.winfo_children())}")
 
@@ -305,7 +321,7 @@ class AccountsPanel(ttk.Frame):
     def open_browser_for_account(self, acc):
         """Open browser for a specific account"""
         try:
-            from selenium_manager import open_browser_with_profile
+            from selenium_manager import get_global_driver_manager
             
             self.log_message(f"🚀 Opening browser for {acc.label}...")
             
@@ -313,7 +329,8 @@ class AccountsPanel(ttk.Frame):
             import threading
             def open_browser():
                 try:
-                    driver = open_browser_with_profile(acc)
+                    # Use the driver manager to get/create driver
+                    driver = get_global_driver_manager().get_driver(acc)
                     if driver:
                         self.browser_drivers[acc.label] = driver
                         self.log_message(f"✅ Browser opened for {acc.label}")
@@ -332,16 +349,17 @@ class AccountsPanel(ttk.Frame):
     def close_browser_for_account(self, acc):
         """Close browser for a specific account"""
         try:
-            driver = self.browser_drivers.get(acc.label)
-            if driver:
-                try:
-                    driver.quit()
-                    del self.browser_drivers[acc.label]
-                    self.log_message(f"✅ Browser closed for {acc.label}")
-                except Exception as e:
-                    self.log_message(f"❌ Error closing browser for {acc.label}: {e}")
-            else:
-                self.log_message(f"ℹ️ No browser open for {acc.label}")
+            from selenium_manager import get_global_driver_manager
+            
+            # Use the driver manager to close the driver (this will save cookies)
+            driver_manager = get_global_driver_manager()
+            driver_manager.close_driver(acc)
+            
+            # Remove from local tracking
+            if acc.label in self.browser_drivers:
+                del self.browser_drivers[acc.label]
+            
+            self.log_message(f"✅ Browser closed for {acc.label}")
                 
         except Exception as e:
             self.log_message(f"❌ Error closing browser: {e}")
@@ -618,15 +636,22 @@ class AccountsPanel(ttk.Frame):
                         print(f"⚠️ Error updating browser status for {acc.label}: {e}")
 
     def bulk_close_browsers(self):
+        from selenium_manager import get_global_driver_manager
+        
+        driver_manager = get_global_driver_manager()
+        
         for acc in self.accounts:
             if acc.label in self.browser_drivers:
                 try:
-                    self.browser_drivers[acc.label].quit()
-                except Exception:
-                    pass
+                    # Use driver manager to close (this will save cookies)
+                    driver_manager.close_driver(acc)
+                except Exception as e:
+                    print(f"⚠️ Error closing browser for {acc.label}: {e}")
+                
                 from selenium_manager import log_browser_close
                 log_browser_close(acc, "closed")
                 del self.browser_drivers[acc.label]
+                
                 btn = self.browser_buttons.get(acc.label)
                 if btn and btn is not None:
                     try:
@@ -639,6 +664,62 @@ class AccountsPanel(ttk.Frame):
                         lbl.config(text="⚪")
                     except Exception as e:
                         print(f"⚠️ Error updating browser status for {acc.label}: {e}")
+        self.log("✅ All browser sessions closed")
+
+    def verify_all_profiles(self):
+        """Verify that all Chrome profiles are using the correct approach"""
+        def worker():
+            try:
+                self.log("🔍 Verifying all Chrome profiles...")
+                
+                for acc in self.accounts:
+                    self.log(f"📋 Checking profile for {acc.label}...")
+                    
+                    # Import the verification function
+                    from selenium_manager import check_profile_session_data, cleanup_chrome_profile_cache
+                    
+                    # Clean up cache directories
+                    cleanup_chrome_profile_cache(acc)
+                    
+                    # Check session data
+                    has_session = check_profile_session_data(acc)
+                    
+                    if has_session:
+                        self.log(f"✅ {acc.label}: Profile has session data")
+                    else:
+                        self.log(f"⚠️ {acc.label}: No session data found")
+                
+                self.log("✅ Profile verification completed")
+                
+            except Exception as e:
+                self.log(f"❌ Error verifying profiles: {e}")
+        
+        threading.Thread(target=worker, daemon=True).start()
+
+    def setup_foxyproxy_for_all(self):
+        """Set up FoxyProxy extension for all accounts"""
+        def worker():
+            try:
+                self.log("🔧 Setting up FoxyProxy for all accounts...")
+                
+                from selenium_manager import setup_foxyproxy_for_account
+                
+                for acc in self.accounts:
+                    self.log(f"📋 Setting up FoxyProxy for {acc.label}...")
+                    
+                    success = setup_foxyproxy_for_account(acc)
+                    
+                    if success:
+                        self.log(f"✅ FoxyProxy setup completed for {acc.label}")
+                    else:
+                        self.log(f"❌ FoxyProxy setup failed for {acc.label}")
+                
+                self.log("✅ FoxyProxy setup completed for all accounts")
+                
+            except Exception as e:
+                self.log(f"❌ Error setting up FoxyProxy: {e}")
+        
+        threading.Thread(target=worker, daemon=True).start()
 
     def edit_tags_dialog(self, acc, label_widget):
         import tkinter.simpledialog
@@ -1195,6 +1276,20 @@ class AccountsPanel(ttk.Frame):
                     proxy_btn = ttk.Button(button_frame, text="🔧", width=4,
                                          command=lambda a=acc: self.assign_proxy_to_account(a.label))
                     proxy_btn.pack(side='left', padx=1)
+                    
+                    # Save Cookies button (compact)
+                    def save_cookies_for_account(account):
+                        from selenium_manager import manual_save_cookies
+                        self.log(f"💾 Manually saving cookies for {account.label}...")
+                        success = manual_save_cookies(account)
+                        if success:
+                            self.log(f"✅ Cookies saved for {account.label}")
+                        else:
+                            self.log(f"❌ Failed to save cookies for {account.label}", is_error=True)
+                    
+                    save_cookies_btn = ttk.Button(button_frame, text="💾", width=4,
+                                                command=lambda a=acc: save_cookies_for_account(a))
+                    save_cookies_btn.pack(side='left', padx=1)
                     
                 except Exception as e:
                     print(f"❌ Error creating row for account {acc.label}: {e}")
