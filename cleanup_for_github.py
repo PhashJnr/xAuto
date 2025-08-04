@@ -36,6 +36,9 @@ def cleanup_for_github():
         "test_fix.py",
         "test_ui.py",
         "test_foxyproxy.py",
+        "test_multi_tweet_reply.py",
+        "test_button_visibility.py",
+        "test_simple_reply_panel.py",
         
         # Sample files
         "sample_*.txt",

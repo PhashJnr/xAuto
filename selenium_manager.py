@@ -137,43 +137,73 @@ class SeleniumDriverManager:
                 # Close specific account's driver
                 if acc.label in self.drivers:
                     try:
-                        # Save session data before closing
                         driver = self.drivers[acc.label]
-                        ensure_session_saved(driver, acc)
                         
-                        # Save cookies before closing
-                        save_cookies(driver, acc)
+                        # Check if driver is still valid before saving
+                        if self.is_driver_valid(driver):
+                            try:
+                                # Save session data before closing
+                                ensure_session_saved(driver, acc)
+                            except Exception as e:
+                                print(f"⚠️ Error saving session for {acc.label}: {e}")
+                            
+                            try:
+                                # Save cookies before closing
+                                save_cookies(driver, acc)
+                            except Exception as e:
+                                print(f"⚠️ Error saving cookies for {acc.label}: {e}")
+                            
+                            # Wait a bit for saves to complete
+                            time.sleep(1)
                         
-                        # Wait a bit for saves to complete
-                        time.sleep(2)
-                        
-                        driver.quit()
+                        # Close the driver
+                        try:
+                            driver.quit()
+                        except Exception as e:
+                            print(f"⚠️ Error quitting driver for {acc.label}: {e}")
+                            
                     except Exception as e:
                         print(f"⚠️ Error closing driver for {acc.label}: {e}")
-                    del self.drivers[acc.label]
-                    print(f"🔒 Closed browser session for {acc.label}")
+                    finally:
+                        del self.drivers[acc.label]
+                        print(f"🔒 Closed browser session for {acc.label}")
             else:
                 # Close all drivers
                 print(f"🔒 Closing all browser sessions ({len(self.drivers)} drivers)")
-                for label, driver in self.drivers.items():
+                for label, driver in list(self.drivers.items()):
                     try:
                         # Create a temporary account object for cookie saving
                         from account_manager import SeleniumAccount
                         temp_acc = SeleniumAccount(label, label)  # Use label as both label and username
                         
-                        # Save session data before closing
-                        ensure_session_saved(driver, temp_acc)
+                        # Check if driver is still valid before saving
+                        if self.is_driver_valid(driver):
+                            try:
+                                # Save session data before closing
+                                ensure_session_saved(driver, temp_acc)
+                            except Exception as e:
+                                print(f"⚠️ Error saving session for {label}: {e}")
+                            
+                            try:
+                                # Save cookies before closing
+                                save_cookies(driver, temp_acc)
+                            except Exception as e:
+                                print(f"⚠️ Error saving cookies for {label}: {e}")
+                            
+                            # Wait a bit for saves to complete
+                            time.sleep(1)
                         
-                        # Save cookies before closing
-                        save_cookies(driver, temp_acc)
-                        
-                        # Wait a bit for saves to complete
-                        time.sleep(2)
-                        
-                        driver.quit()
-                        print(f"🔒 Closed browser session for {label}")
+                        # Close the driver
+                        try:
+                            driver.quit()
+                        except Exception as e:
+                            print(f"⚠️ Error quitting driver for {label}: {e}")
+                            
                     except Exception as e:
                         print(f"⚠️ Error closing driver for {label}: {e}")
+                    finally:
+                        print(f"🔒 Closed browser session for {label}")
+                
                 self.drivers.clear()
                 print("🔒 Closed all browser sessions")
     
@@ -188,13 +218,22 @@ class SeleniumDriverManager:
 def save_cookies(driver, acc):
     """Save cookies for the account"""
     try:
+        # Check if driver is still valid
+        if not driver or not hasattr(driver, 'get_cookies'):
+            print(f"⚠️ Driver for {acc.label} is not valid, skipping cookie save")
+            return
+        
         # Ensure cookies directory exists
         cookie_dir = os.path.dirname(acc.get_cookie_path())
         os.makedirs(cookie_dir, exist_ok=True)
         
-        # Get cookies from driver
-        cookies = driver.get_cookies()
-        print(f"🍪 Got {len(cookies)} cookies from driver for {acc.label}")
+        # Get cookies from driver with error handling
+        try:
+            cookies = driver.get_cookies()
+            print(f"🍪 Got {len(cookies)} cookies from driver for {acc.label}")
+        except Exception as e:
+            print(f"⚠️ Could not get cookies from driver for {acc.label}: {e}")
+            return
         
         # Save cookies to file
         cookie_path = acc.get_cookie_path()
@@ -1525,39 +1564,56 @@ def ensure_session_saved(driver, acc):
     try:
         print(f"💾 Ensuring session data is saved for {acc.label}")
         
+        # Check if driver is still valid
+        if not driver or not hasattr(driver, 'get'):
+            print(f"⚠️ Driver for {acc.label} is not valid, skipping session save")
+            return False
+        
         # Navigate to a simple page to trigger session save
-        driver.get('https://x.com/')
-        time.sleep(3)
+        try:
+            driver.get('https://x.com/')
+            time.sleep(3)
+        except Exception as e:
+            print(f"⚠️ Could not navigate for session save for {acc.label}: {e}")
+            return False
         
         # Execute JavaScript to force session save
-        driver.execute_script("""
-            // Force localStorage and sessionStorage to persist
-            if (window.localStorage) {
-                localStorage.setItem('session_persist', 'true');
-            }
-            if (window.sessionStorage) {
-                sessionStorage.setItem('session_persist', 'true');
-            }
-            
-            // Force any pending writes to complete
-            if (window.navigator && window.navigator.storage) {
-                window.navigator.storage.persist();
-            }
-        """)
+        try:
+            driver.execute_script("""
+                // Force localStorage and sessionStorage to persist
+                if (window.localStorage) {
+                    localStorage.setItem('session_persist', 'true');
+                }
+                if (window.sessionStorage) {
+                    sessionStorage.setItem('session_persist', 'true');
+                }
+                
+                // Force any pending writes to complete
+                if (window.navigator && window.navigator.storage) {
+                    window.navigator.storage.persist();
+                }
+            """)
+        except Exception as e:
+            print(f"⚠️ Could not execute session save script for {acc.label}: {e}")
+            return False
         
         # Wait longer for Chrome to save session data
         time.sleep(5)
         
         # Force a page refresh to ensure data is written
-        driver.refresh()
-        time.sleep(3)
+        try:
+            driver.refresh()
+            time.sleep(3)
+        except Exception as e:
+            print(f"⚠️ Could not refresh page for session save for {acc.label}: {e}")
+            return False
         
         print(f"✅ Session data saved for {acc.label}")
         return True
         
     except Exception as e:
         print(f"⚠️ Error saving session for {acc.label}: {e}")
-        return False 
+        return False
 
 def manual_save_cookies(acc):
     """Manually save cookies for an account"""
