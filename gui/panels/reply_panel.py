@@ -127,8 +127,21 @@ class ReplyPanel(ttk.Frame):
         urls_frame = ttk.LabelFrame(content_frame, text="Tweet URLs (one per line)", padding="10")
         urls_frame.pack(fill='x', pady=5)
         
-        self.tweet_urls_text = tk.Text(urls_frame, height=3, wrap='word')
-        self.tweet_urls_text.pack(fill='x', padx=5, pady=5)
+        # URLs input and load button frame
+        urls_input_frame = ttk.Frame(urls_frame)
+        urls_input_frame.pack(fill='x', pady=5)
+        
+        self.tweet_urls_text = tk.Text(urls_input_frame, height=3, wrap='word')
+        self.tweet_urls_text.pack(side='left', fill='x', expand=True, padx=(5, 5))
+        
+        # Load from file button
+        self.load_from_file_button = tk.Button(urls_input_frame, text="📁 Load from File", 
+                                             command=self.load_urls_from_file,
+                                             font=('Segoe UI', 9, 'bold'),
+                                             bg='#6c757d', fg='white',
+                                             relief='raised', bd=2,
+                                             padx=10, pady=3)
+        self.load_from_file_button.pack(side='right', padx=(0, 5))
         
         # Load contents button - make it more prominent
         button_frame = ttk.Frame(urls_frame)
@@ -624,3 +637,22 @@ class ReplyPanel(ttk.Frame):
         self.pause_button.config(state='disabled')
         self.stop_button.config(state='disabled')
         self.load_contents_button.config(state='normal') 
+
+    def load_urls_from_file(self):
+        """Load tweet URLs from a file (e.g., linkstocomment.txt)"""
+        file_path = 'linkstocomment.txt' # Default file name
+        try:
+            with open(file_path, 'r') as f:
+                urls = [line.strip() for line in f if line.strip()]
+                if not urls:
+                    messagebox.showwarning("No URLs Found", f"No URLs found in {file_path}.")
+                    return
+                self.tweet_urls_text.delete('1.0', tk.END)
+                self.tweet_urls_text.insert('1.0', '\n'.join(urls))
+                self.tweet_urls_text.see(tk.END)
+                self.log(f"📁 Loaded {len(urls)} URLs from {file_path}")
+        except FileNotFoundError:
+            messagebox.showerror("File Not Found", f"The file '{file_path}' was not found.")
+        except Exception as e:
+            messagebox.showerror("Error Loading File", f"An error occurred while loading URLs from file: {e}")
+            self.log(f"❌ Error loading URLs from file {file_path}: {e}", is_error=True) 

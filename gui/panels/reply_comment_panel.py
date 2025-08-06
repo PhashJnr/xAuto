@@ -143,8 +143,21 @@ class ReplyCommentPanel(ttk.Frame):
         urls_frame = ttk.LabelFrame(self.auto_frame, text="Tweet URLs (one per line)", padding="10")
         urls_frame.pack(fill='x', padx=10, pady=5)
         
-        self.auto_urls_text = tk.Text(urls_frame, height=4, width=40)
-        self.auto_urls_text.pack(fill='x', padx=5, pady=5)
+        # URLs input and load button frame
+        urls_input_frame = ttk.Frame(urls_frame)
+        urls_input_frame.pack(fill='x', pady=5)
+        
+        self.auto_urls_text = tk.Text(urls_input_frame, height=4, width=40)
+        self.auto_urls_text.pack(side='left', fill='x', expand=True, padx=(5, 5))
+        
+        # Load from file button
+        self.auto_load_from_file_button = tk.Button(urls_input_frame, text="📁 Load from File", 
+                                                  command=self.auto_load_urls_from_file,
+                                                  font=('Segoe UI', 9, 'bold'),
+                                                  bg='#6c757d', fg='white',
+                                                  relief='raised', bd=2,
+                                                  padx=10, pady=3)
+        self.auto_load_from_file_button.pack(side='right', padx=(0, 5))
         
         # Reply text
         reply_frame = ttk.LabelFrame(self.auto_frame, text="Reply Text", padding="10")
@@ -598,3 +611,25 @@ class ReplyCommentPanel(ttk.Frame):
         """Update auto reply progress display"""
         self.progress_var.set(f"Processed: {self.auto_stats['processed']}")
         self.stats_var.set(f"Processed: {self.auto_stats['processed']} | Successful: {self.auto_stats['successful']} | Failed: {self.auto_stats['failed']}") 
+
+    def auto_load_urls_from_file(self):
+        """Load tweet URLs from a file named linkstocomment.txt"""
+        file_path = 'linkstocomment.txt'
+        if not os.path.exists(file_path):
+            self.auto_log(f"Error: linkstocomment.txt not found at {file_path}", is_error=True)
+            return
+        
+        try:
+            with open(file_path, 'r') as f:
+                urls = [line.strip() for line in f if line.strip()]
+            
+            if not urls:
+                self.auto_log(f"No URLs found in {file_path}.", is_error=True)
+                return
+            
+            self.auto_urls_text.delete('1.0', 'end')
+            for url in urls:
+                self.auto_urls_text.insert('end', url + '\n')
+            self.auto_log(f"Loaded {len(urls)} URLs from {file_path}.")
+        except Exception as e:
+            self.auto_log(f"Error loading URLs from file: {e}", is_error=True) 

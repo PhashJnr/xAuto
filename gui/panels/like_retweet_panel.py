@@ -28,6 +28,7 @@ class LikeRetweetPanel(ttk.Frame):
             'max_interval': '30',
             'enable_retweet': True,
             'enable_like': True,
+            'enable_random_retweet': False,
             'log_messages': []
         }
 
@@ -47,8 +48,21 @@ class LikeRetweetPanel(ttk.Frame):
         # Tweet URLs input
         ttk.Label(left_panel, text="Tweet URLs (one per line):", font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=(0, 5))
         
-        self.tweet_urls_text = scrolledtext.ScrolledText(left_panel, height=8, width=50, wrap='word')
-        self.tweet_urls_text.pack(fill='x', pady=(0, 10))
+        # URLs input and load button frame
+        urls_input_frame = ttk.Frame(left_panel)
+        urls_input_frame.pack(fill='x', pady=(0, 10))
+        
+        self.tweet_urls_text = scrolledtext.ScrolledText(urls_input_frame, height=8, width=50, wrap='word')
+        self.tweet_urls_text.pack(side='left', fill='x', expand=True)
+        
+        # Load from file button
+        self.load_from_file_button = tk.Button(urls_input_frame, text="📁 Load from File", 
+                                             command=self.load_urls_from_file,
+                                             font=('Segoe UI', 9, 'bold'),
+                                             bg='#6c757d', fg='white',
+                                             relief='raised', bd=2,
+                                             padx=10, pady=3)
+        self.load_from_file_button.pack(side='right', padx=(5, 0))
         
         # Time interval settings
         interval_frame = ttk.LabelFrame(left_panel, text="⏱️ Time Intervals", padding="5")
@@ -70,9 +84,11 @@ class LikeRetweetPanel(ttk.Frame):
         
         self.enable_like_var = tk.BooleanVar(value=self.state['enable_like'])
         self.enable_retweet_var = tk.BooleanVar(value=self.state['enable_retweet'])
+        self.enable_random_retweet_var = tk.BooleanVar(value=self.state['enable_random_retweet'])
         
         ttk.Checkbutton(actions_frame, text="Enable Liking", variable=self.enable_like_var).pack(anchor='w')
         ttk.Checkbutton(actions_frame, text="Enable Retweeting", variable=self.enable_retweet_var).pack(anchor='w')
+        ttk.Checkbutton(actions_frame, text="Random Retweet (20%)", variable=self.enable_random_retweet_var).pack(anchor='w')
         
         # Account selection
         accounts_frame = ttk.LabelFrame(left_panel, text="👤 Accounts", padding="5")
@@ -176,6 +192,7 @@ class LikeRetweetPanel(ttk.Frame):
         self.state['max_interval'] = self.max_interval_var.get()
         self.state['enable_like'] = self.enable_like_var.get()
         self.state['enable_retweet'] = self.enable_retweet_var.get()
+        self.state['enable_random_retweet'] = self.enable_random_retweet_var.get()
 
     def start_like_retweet(self):
         """Start the like and retweet process"""
@@ -245,6 +262,22 @@ class LikeRetweetPanel(ttk.Frame):
             self.pause_button.config(text="▶️ Resume")
             self.log("⏸️ Process paused")
 
+    def load_urls_from_file(self):
+        """Load tweet URLs from a file named linkstocomment.txt"""
+        file_path = "linkstocomment.txt"
+        try:
+            with open(file_path, "r") as f:
+                urls = [line.strip() for line in f if line.strip()]
+                self.tweet_urls_text.delete('1.0', tk.END)
+                self.tweet_urls_text.insert('1.0', "\n".join(urls))
+                self.log(f"Loaded {len(urls)} URLs from {file_path}")
+            messagebox.showinfo("Success", f"Loaded {len(urls)} URLs from {file_path}")
+        except FileNotFoundError:
+            messagebox.showerror("Error", f"File not found: {file_path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error loading URLs from file: {e}")
+            self.log(f"Error loading URLs from file: {e}", is_error=True)
+
     def _like_retweet_worker(self, tweet_urls, accounts, min_interval, max_interval):
         """Worker thread for like and retweet processing"""
         try:
@@ -252,6 +285,15 @@ class LikeRetweetPanel(ttk.Frame):
             processed = 0
             success_count = 0
             failed_count = 0
+            
+            # Determine which tweets to retweet if random retweet is enabled
+            tweets_to_retweet = set()
+            if self.enable_random_retweet_var.get():
+                import random
+                # Select 20% of tweets randomly for retweeting
+                num_to_retweet = max(1, int(total_tweets * 0.2))  # At least 1 tweet
+                tweets_to_retweet = set(random.sample(range(total_tweets), num_to_retweet))
+                self.log(f"🎲 Random retweet enabled: Will retweet {len(tweets_to_retweet)} out of {total_tweets} tweets (20%)")
             
             self.log(f"🚀 Starting like/retweet process with {len(accounts)} accounts")
             self.log(f"📊 Total tweets to process: {total_tweets}")
@@ -274,7 +316,13 @@ class LikeRetweetPanel(ttk.Frame):
                 self.after(0, lambda p=progress, proc=processed, succ=success_count, fail=failed_count: 
                           self._update_progress(p, proc, succ, fail))
                 
+                # Check if this tweet should be retweeted (for random retweet mode)
+                should_retweet_this_tweet = i in tweets_to_retweet if self.enable_random_retweet_var.get() else True
+                
                 self.log(f"📝 Processing tweet {processed}/{total_tweets}: {tweet_url}")
+                if self.enable_random_retweet_var.get():
+                    retweet_status = "🎲 Will retweet" if should_retweet_this_tweet else "⏭️ Skip retweet"
+                    self.log(f"  {retweet_status}")
                 
                 # Process with each account
                 for account in accounts:
@@ -282,7 +330,7 @@ class LikeRetweetPanel(ttk.Frame):
                         break
                     
                     try:
-                        success = self._process_tweet_with_account(account, tweet_url, min_interval, max_interval)
+                        success = self._process_tweet_with_account(account, tweet_url, min_interval, max_interval, should_retweet_this_tweet)
                         if success:
                             success_count += 1
                         else:
@@ -312,7 +360,7 @@ class LikeRetweetPanel(ttk.Frame):
         finally:
             self.after(0, self.stop_like_retweet)
 
-    def _process_tweet_with_account(self, account, tweet_url, min_interval, max_interval):
+    def _process_tweet_with_account(self, account, tweet_url, min_interval, max_interval, should_retweet):
         """Process a single tweet with one account"""
         try:
             driver_manager = get_global_driver_manager()
@@ -343,13 +391,15 @@ class LikeRetweetPanel(ttk.Frame):
                     self.log(f"❌ Failed to like tweet with {account.label}")
                     success = False
             
-            # Retweet the tweet
-            if self.enable_retweet_var.get():
+            # Retweet the tweet (only if should_retweet is True)
+            if self.enable_retweet_var.get() and should_retweet:
                 if self._retweet_tweet(driver):
                     self.log(f"🔄 Retweeted with {account.label}")
                 else:
                     self.log(f"❌ Failed to retweet with {account.label}")
                     success = False
+            elif self.enable_retweet_var.get() and not should_retweet:
+                self.log(f"⏭️ Skipped retweet with {account.label} (random mode)")
             
             return success
             

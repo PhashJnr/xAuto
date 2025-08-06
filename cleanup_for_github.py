@@ -39,6 +39,8 @@ def cleanup_for_github():
         "test_multi_tweet_reply.py",
         "test_button_visibility.py",
         "test_simple_reply_panel.py",
+        "test_enhanced_reply_panel.py",
+        "test_load_from_file.py",
         
         # Sample files
         "sample_*.txt",
@@ -100,6 +102,63 @@ def cleanup_for_github():
         "debug_proxy_extension.py",
         "test_browser_isolation.py",
         "fix_proxy_parsing.py",
+        
+        # Documentation files (not needed for GitHub)
+        "GITHUB_FILES.md",
+        "SETUP_GITHUB.md",
+        
+        # Sample data files
+        "linkstocomment.txt",
+        
+        # Python cache files
+        "__pycache__/",
+        "*.pyc",
+        "*.pyo",
+        "*.pyd",
+        
+        # IDE and editor files
+        ".vscode/",
+        ".idea/",
+        "*.swp",
+        "*.swo",
+        "*~",
+        
+        # OS files
+        ".DS_Store",
+        ".DS_Store?",
+        "._*",
+        ".Spotlight-V100",
+        ".Trashes",
+        "ehthumbs.db",
+        "Thumbs.db",
+        
+        # Environment files
+        ".env",
+        ".env.local",
+        ".env.production",
+        "secrets.json",
+        "config.json",
+        "api_keys.txt",
+        
+        # Log files
+        "*.log",
+        "logs/",
+        
+        # Database files
+        "*.db",
+        "*.db-journal",
+        "*.dat",
+        "*.pma",
+        
+        # Pickle files
+        "*.pkl",
+        
+        # Temporary directories
+        "temp/",
+        "tmp/",
+        "test_outputs/",
+        "debug_outputs/",
+        "New folder/",
     ]
     
     # Directories to remove (only those NOT in .gitignore)
@@ -108,6 +167,8 @@ def cleanup_for_github():
         "tmp/",
         "test_outputs/",
         "debug_outputs/",
+        "New folder/",
+        "__pycache__/",
     ]
     
     removed_count = 0
@@ -140,13 +201,20 @@ def cleanup_for_github():
     print("- selenium_manager.py")
     print("- account_manager.py")
     print("- ai_integration.py")
-    print("- create_proxy_plugin.py")
     print("- constants.py")
     print("- utils.py")
     print("- requirements.txt")
     print("- requirements_ai.txt")
     print("- README.md")
     print("- .gitignore")
+    print("- cleanup_for_github.py")
+    print("- final_cleanup.py")
+    print("\n📝 Note: The following are handled by .gitignore and will not be pushed:")
+    print("- chrome_profiles/")
+    print("- cookies/")
+    print("- accounts.json")
+    print("- logs/")
+    print("- *.log files")
 
 if __name__ == "__main__":
     cleanup_for_github() 

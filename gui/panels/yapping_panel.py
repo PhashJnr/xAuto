@@ -65,7 +65,9 @@ class YappingPanel(ttk.Frame):
         self.accounts = accounts
         
         # Manual yapping variables
-        self.tweet_url_entry = None
+        self.tweet_urls_text = None
+        self.load_from_file_button = None
+        self.load_contents_button = None
         self.accounts_listbox = None
         self.ai_prompt_entry = None
         self.ai_comments_text = None
@@ -75,6 +77,29 @@ class YappingPanel(ttk.Frame):
         self.ai_enabled_var = None
         self.context_analysis_var = None
         self.auto_reply_var = None
+        
+        # Enhanced manual yapping variables
+        self.tweet_content_display = None
+        self.tweet_navigation_frame = None
+        self.prev_button = None
+        self.next_button = None
+        self.tweet_counter_label = None
+        self.individual_reply_text = None
+        self.generate_ai_button = None
+        self.edit_comment_button = None
+        self.send_reply_button = None
+        self.min_interval_entry = None
+        self.max_interval_entry = None
+        self.start_reply_button = None
+        self.pause_button = None
+        self.stop_button = None
+        self.progress_bar = None
+        self.progress_label = None
+        self.stats_label = None
+        self.current_tweet_index = 0
+        self.tweets_data = []  # List of {url, content, success, reply_text}
+        self.is_replying = False
+        self.is_paused = False
         
         # Auto yapping variables
         self.auto_search_entry = None
@@ -132,7 +157,9 @@ class YappingPanel(ttk.Frame):
             'ai_enabled': True,
             'context_analysis': True,
             'auto_reply': False,
-            'review_before_posting': False
+            'review_before_posting': False,
+            'min_interval': '30',
+            'max_interval': '60'
         }
         
         # Don't call build_panel() here - it will be called by the main app
@@ -165,8 +192,9 @@ class YappingPanel(ttk.Frame):
             return self.ai_integration.provider
 
     def on_tweet_url_change(self, event=None):
-        """Save tweet URL to state"""
-        self.state['tweet_url'] = self.tweet_url_entry.get()
+        """Save tweet URLs to state"""
+        if hasattr(self, 'tweet_urls_text') and self.tweet_urls_text:
+            self.state['tweet_url'] = self.tweet_urls_text.get('1.0', tk.END).strip()
 
     def on_ai_prompt_change(self, event=None):
         """Save AI prompt to state"""
@@ -257,65 +285,178 @@ class YappingPanel(ttk.Frame):
 
     def _build_manual_tab(self):
         """Build the manual yapping tab"""
-        # Tweet URL Input
-        url_frame = ttk.LabelFrame(self.manual_frame, text="Tweet URL", padding="10")
+        # Tweet URLs Input (Multi-URL support)
+        url_frame = ttk.LabelFrame(self.manual_frame, text="📝 Tweet URLs (one per line)", padding="10")
         url_frame.grid(row=0, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
         
-        self.tweet_url_entry = tk.Entry(url_frame, width=80)
-        self.tweet_url_entry.grid(row=0, column=0, sticky='ew', padx=5, pady=2)
-        self.tweet_url_entry.bind('<KeyRelease>', self.on_tweet_url_change)
+        # URLs input and load button frame
+        urls_input_frame = ttk.Frame(url_frame)
+        urls_input_frame.pack(fill='x', pady=(0, 10))
         
-        ttk.Button(url_frame, text="🔍 Analyze Tweet & Comments", command=self.analyze_tweet_context).grid(row=0, column=1, padx=5, pady=2)
+        # Create a frame for the text area and scrollbar
+        urls_text_frame = ttk.Frame(urls_input_frame)
+        urls_text_frame.pack(side='left', fill='x', expand=True)
+        
+        self.tweet_urls_text = tk.Text(urls_text_frame, height=6, width=80, wrap='word')
+        self.tweet_urls_text.pack(side='left', fill='x', expand=True)
+        
+        # Add scrollbar for tweet URLs text area
+        urls_scrollbar = ttk.Scrollbar(urls_text_frame, orient="vertical", command=self.tweet_urls_text.yview)
+        urls_scrollbar.pack(side='right', fill='y')
+        self.tweet_urls_text.configure(yscrollcommand=urls_scrollbar.set)
+        
+        # Load from file button
+        self.load_from_file_button = tk.Button(urls_input_frame, text="📁 Load from File", 
+                                             command=self.load_urls_from_file,
+                                             font=('Segoe UI', 9, 'bold'),
+                                             bg='#6c757d', fg='white',
+                                             relief='raised', bd=2,
+                                             padx=10, pady=3)
+        self.load_from_file_button.pack(side='right', padx=(5, 0))
+        
+        # Load tweet contents button
+        self.load_contents_button = tk.Button(url_frame, text="🔍 Load Tweet Contents", 
+                                            command=self.load_tweet_contents,
+                                            font=('Segoe UI', 9, 'bold'),
+                                            bg='#28a745', fg='white',
+                                            relief='raised', bd=2,
+                                            padx=10, pady=3)
+        self.load_contents_button.pack(pady=5)
         
         # Account Selection
-        accounts_frame = ttk.LabelFrame(self.manual_frame, text="Select Accounts", padding="10")
+        accounts_frame = ttk.LabelFrame(self.manual_frame, text="👤 Select Accounts", padding="10")
         accounts_frame.grid(row=1, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
         
         # Tag filter
         filter_frame = ttk.Frame(accounts_frame)
-        filter_frame.grid(row=0, column=0, columnspan=2, sticky='ew', pady=5)
+        filter_frame.pack(fill='x', pady=5)
         
-        tk.Label(filter_frame, text="Filter by Tag:", bg=COLOR_TAUPE, fg=COLOR_DARK).grid(row=0, column=0, sticky='w', padx=5)
+        tk.Label(filter_frame, text="Filter by Tag:", bg=COLOR_TAUPE, fg=COLOR_DARK).pack(side='left', padx=5)
         self.selected_tag = tk.StringVar(value='All')
         self.tag_filter_dropdown = ttk.Combobox(filter_frame, textvariable=self.selected_tag, state='readonly', width=20)
-        self.tag_filter_dropdown.grid(row=0, column=1, sticky='w', padx=5)
+        self.tag_filter_dropdown.pack(side='left', padx=5)
         self.tag_filter_dropdown.bind('<<ComboboxSelected>>', self.on_tag_filter_change)
         
         # Accounts listbox
         listbox_frame = ttk.Frame(accounts_frame)
-        listbox_frame.grid(row=1, column=0, columnspan=2, sticky='ew', pady=5)
+        listbox_frame.pack(fill='x', pady=5)
         
-        self.accounts_listbox = tk.Listbox(listbox_frame, height=8, selectmode='multiple')
-        self.accounts_listbox.grid(row=0, column=0, sticky='ew', padx=5)
+        self.accounts_listbox = tk.Listbox(listbox_frame, height=6, selectmode='multiple')
+        self.accounts_listbox.pack(side='left', fill='x', expand=True, padx=5)
         
         scrollbar_accounts = ttk.Scrollbar(listbox_frame, orient="vertical", command=self.accounts_listbox.yview)
-        scrollbar_accounts.grid(row=0, column=1, sticky='ns')
+        scrollbar_accounts.pack(side='right', fill='y')
         self.accounts_listbox.configure(yscrollcommand=scrollbar_accounts.set)
         
+        # Tweet Content Display with Navigation
+        content_frame = ttk.LabelFrame(self.manual_frame, text="📊 Tweet Content", padding="10")
+        content_frame.grid(row=2, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
+        
+        # Navigation frame
+        self.tweet_navigation_frame = ttk.Frame(content_frame)
+        self.tweet_navigation_frame.pack(fill='x', pady=(0, 5))
+        
+        self.prev_button = tk.Button(self.tweet_navigation_frame, text="◀ Previous", 
+                                    command=self.prev_tweet,
+                                    font=('Segoe UI', 9, 'bold'),
+                                    bg='#6c757d', fg='white',
+                                    relief='raised', bd=2,
+                                    padx=10, pady=3)
+        self.prev_button.pack(side='left', padx=(0, 5))
+        
+        self.tweet_counter_label = tk.Label(self.tweet_navigation_frame, text="Tweet 0 of 0", 
+                                          font=('Segoe UI', 10, 'bold'),
+                                          bg=COLOR_TAUPE, fg=COLOR_DARK)
+        self.tweet_counter_label.pack(side='left', padx=10)
+        
+        self.next_button = tk.Button(self.tweet_navigation_frame, text="Next ▶", 
+                                    command=self.next_tweet,
+                                    font=('Segoe UI', 9, 'bold'),
+                                    bg='#6c757d', fg='white',
+                                    relief='raised', bd=2,
+                                    padx=10, pady=3)
+        self.next_button.pack(side='left', padx=(5, 0))
+        
+        # Tweet content display with scrollbar
+        content_text_frame = ttk.Frame(content_frame)
+        content_text_frame.pack(fill='x', pady=5)
+        
+        self.tweet_content_display = tk.Text(content_text_frame, height=8, width=80, wrap='word', state='disabled')
+        self.tweet_content_display.pack(side='left', fill='x', expand=True)
+        
+        # Add scrollbar for tweet content display
+        content_scrollbar = ttk.Scrollbar(content_text_frame, orient="vertical", command=self.tweet_content_display.yview)
+        content_scrollbar.pack(side='right', fill='y')
+        self.tweet_content_display.configure(yscrollcommand=content_scrollbar.set)
+        
+        # Individual Reply Text
+        reply_frame = ttk.LabelFrame(self.manual_frame, text="💬 Individual Reply Text", padding="10")
+        reply_frame.grid(row=3, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
+        
+        # Create a frame for the reply text area and scrollbar
+        reply_text_frame = ttk.Frame(reply_frame)
+        reply_text_frame.pack(fill='x', pady=5)
+        
+        self.individual_reply_text = tk.Text(reply_text_frame, height=4, width=80, wrap='word')
+        self.individual_reply_text.pack(side='left', fill='x', expand=True)
+        
+        # Add scrollbar for individual reply text area
+        reply_scrollbar = ttk.Scrollbar(reply_text_frame, orient="vertical", command=self.individual_reply_text.yview)
+        reply_scrollbar.pack(side='right', fill='y')
+        self.individual_reply_text.configure(yscrollcommand=reply_scrollbar.set)
+        
+        # Reply action buttons
+        reply_buttons_frame = ttk.Frame(reply_frame)
+        reply_buttons_frame.pack(fill='x', pady=5)
+        
+        self.generate_ai_button = tk.Button(reply_buttons_frame, text="🤖 Generate AI Comment", 
+                                          command=self.generate_ai_comment_for_current_tweet,
+                                          font=('Segoe UI', 9, 'bold'),
+                                          bg='#17a2b8', fg='white',
+                                          relief='raised', bd=2,
+                                          padx=10, pady=3)
+        self.generate_ai_button.pack(side='left', padx=(0, 5))
+        
+        self.edit_comment_button = tk.Button(reply_buttons_frame, text="✏️ Edit Comment", 
+                                           command=self.edit_current_comment,
+                                           font=('Segoe UI', 9, 'bold'),
+                                           bg='#ffc107', fg='black',
+                                           relief='raised', bd=2,
+                                           padx=10, pady=3)
+        self.edit_comment_button.pack(side='left', padx=(0, 5))
+        
+        self.send_reply_button = tk.Button(reply_buttons_frame, text="✅ Send Reply", 
+                                         command=self.send_reply_for_current_tweet,
+                                         font=('Segoe UI', 9, 'bold'),
+                                         bg='#28a745', fg='white',
+                                         relief='raised', bd=2,
+                                         padx=10, pady=3)
+        self.send_reply_button.pack(side='left')
+        
         # AI Configuration
-        ai_frame = ttk.LabelFrame(self.manual_frame, text="AI Configuration", padding="10")
-        ai_frame.grid(row=2, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
+        ai_frame = ttk.LabelFrame(self.manual_frame, text="🤖 AI Configuration", padding="10")
+        ai_frame.grid(row=4, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
         
         # AI Enable checkbox
         self.ai_enabled_var = tk.BooleanVar(value=self.state['ai_enabled'])
         ai_check = ttk.Checkbutton(ai_frame, text="Enable AI Comments", variable=self.ai_enabled_var, command=self.on_ai_enabled_change)
-        ai_check.grid(row=0, column=0, sticky='w', padx=5, pady=2)
+        ai_check.pack(anchor='w', padx=5, pady=2)
         
         # Context analysis checkbox
         self.context_analysis_var = tk.BooleanVar(value=self.state['context_analysis'])
         context_check = ttk.Checkbutton(ai_frame, text="Analyze Tweet Context", variable=self.context_analysis_var, command=self.on_context_analysis_change)
-        context_check.grid(row=1, column=0, sticky='w', padx=5, pady=2)
+        context_check.pack(anchor='w', padx=5, pady=2)
         
         # Auto reply checkbox
         self.auto_reply_var = tk.BooleanVar(value=self.state['auto_reply'])
         auto_check = ttk.Checkbutton(ai_frame, text="Auto Reply Mode", variable=self.auto_reply_var, command=self.on_auto_reply_change)
-        auto_check.grid(row=2, column=0, sticky='w', padx=5, pady=2)
+        auto_check.pack(anchor='w', padx=5, pady=2)
         
         # AI Prompt
         prompt_frame = ttk.Frame(ai_frame)
-        prompt_frame.grid(row=3, column=0, sticky='ew', padx=5, pady=5)
+        prompt_frame.pack(fill='x', padx=5, pady=5)
         
-        tk.Label(prompt_frame, text="🎯 Custom Reply Instructions:", bg=COLOR_TAUPE, fg=COLOR_DARK, font=('Segoe UI', 10, 'bold')).grid(row=0, column=0, sticky='w', padx=5, pady=(5,2))
+        tk.Label(prompt_frame, text="🎯 Custom Reply Instructions:", bg=COLOR_TAUPE, fg=COLOR_DARK, font=('Segoe UI', 10, 'bold')).pack(anchor='w', padx=5, pady=(5,2))
         
         # Add helpful examples
         examples_text = """Examples:
@@ -331,10 +472,10 @@ class YappingPanel(ttk.Frame):
 • "Be empathetic and understanding\""""
         
         examples_label = tk.Label(prompt_frame, text=examples_text, bg=COLOR_TAUPE, fg=COLOR_DARK, font=('Segoe UI', 8), justify='left', anchor='w')
-        examples_label.grid(row=1, column=0, sticky='w', padx=5, pady=(0,5))
+        examples_label.pack(anchor='w', padx=5, pady=(0,5))
         
         self.ai_prompt_entry = tk.Text(prompt_frame, height=4, width=60, wrap='word')
-        self.ai_prompt_entry.grid(row=2, column=0, sticky='ew', padx=5, pady=2)
+        self.ai_prompt_entry.pack(fill='x', padx=5, pady=2)
         self.ai_prompt_entry.bind('<KeyRelease>', self.on_ai_prompt_change)
         
         # Add placeholder text
@@ -343,43 +484,92 @@ class YappingPanel(ttk.Frame):
         self.ai_prompt_entry.bind('<FocusIn>', self._on_prompt_focus_in)
         self.ai_prompt_entry.bind('<FocusOut>', self._on_prompt_focus_out)
         
-        # AI Comment Generation
-        ai_frame = ttk.LabelFrame(self.manual_frame, text="🤖 AI Comment Generation", padding="10")
-        ai_frame.grid(row=3, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
+        # Time Interval Settings
+        interval_frame = ttk.LabelFrame(self.manual_frame, text="⏱️ Time Intervals", padding="10")
+        interval_frame.grid(row=5, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
         
-        # Generate AI Comments Button
-        self.generate_ai_button = ttk.Button(
-            ai_frame, 
-            text="Generate AI Comment", 
-            command=self.generate_ai_comments,
-            style="Accent.TButton"
-        )
-        self.generate_ai_button.pack(pady=5)
+        interval_input_frame = ttk.Frame(interval_frame)
+        interval_input_frame.pack(fill='x', pady=5)
         
-        # AI Comments Display
-        self.ai_comments_text = tk.Text(ai_frame, height=6, width=80, wrap='word')
-        self.ai_comments_text.pack(fill='both', expand=True, padx=5, pady=5)
+        ttk.Label(interval_input_frame, text="Min Interval (seconds):").pack(side='left', padx=(0, 5))
+        self.min_interval_entry = ttk.Entry(interval_input_frame, width=10)
+        self.min_interval_entry.pack(side='left', padx=(0, 20))
+        self.min_interval_entry.insert(0, '30')
+        self.min_interval_entry.bind('<KeyRelease>', self.on_time_interval_change)
         
-        # Action Buttons
+        ttk.Label(interval_input_frame, text="Max Interval (seconds):").pack(side='left', padx=(0, 5))
+        self.max_interval_entry = ttk.Entry(interval_input_frame, width=10)
+        self.max_interval_entry.pack(side='left')
+        self.max_interval_entry.insert(0, '60')
+        self.max_interval_entry.bind('<KeyRelease>', self.on_time_interval_change)
+        
+        # Control Buttons
         buttons_frame = ttk.Frame(self.manual_frame)
-        buttons_frame.grid(row=4, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
+        buttons_frame.grid(row=6, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
         
-        ttk.Button(buttons_frame, text="🚀 Start Auto-Yapping", command=self.start_auto_yapping).pack(side='left', padx=5)
+        self.start_reply_button = tk.Button(buttons_frame, text="🚀 Start Reply Process", 
+                                          command=self.start_manual_reply_process,
+                                          font=('Segoe UI', 10, 'bold'),
+                                          bg='#28a745', fg='white',
+                                          relief='raised', bd=2,
+                                          padx=15, pady=5)
+        self.start_reply_button.pack(side='left', padx=(0, 5))
+        
+        self.pause_button = tk.Button(buttons_frame, text="⏸️ Pause", 
+                                    command=self.pause_manual_reply_process,
+                                    font=('Segoe UI', 9, 'bold'),
+                                    bg='#ffc107', fg='black',
+                                    relief='raised', bd=2,
+                                    padx=10, pady=3,
+                                    state='disabled')
+        self.pause_button.pack(side='left', padx=(0, 5))
+        
+        self.stop_button = tk.Button(buttons_frame, text="⏹️ Stop", 
+                                   command=self.stop_manual_reply_process,
+                                   font=('Segoe UI', 9, 'bold'),
+                                   bg='#dc3545', fg='white',
+                                   relief='raised', bd=2,
+                                   padx=10, pady=3,
+                                   state='disabled')
+        self.stop_button.pack(side='left')
+        
+        # Progress Section
+        progress_frame = ttk.LabelFrame(self.manual_frame, text="📊 Progress", padding="10")
+        progress_frame.grid(row=7, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
+        
+        self.progress_label = ttk.Label(progress_frame, text="Ready to start...")
+        self.progress_label.pack(anchor='w', pady=(0, 5))
+        
+        self.progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
+        self.progress_bar.pack(fill='x', pady=(0, 5))
+        
+        # Stats frame
+        stats_frame = ttk.Frame(progress_frame)
+        stats_frame.pack(fill='x')
+        
+        self.stats_label = ttk.Label(stats_frame, text="Processed: 0 | Success: 0 | Failed: 0")
+        self.stats_label.pack(anchor='w')
         
         # Log Area
-        log_frame = ttk.LabelFrame(self.manual_frame, text="Activity Log", padding="10")
-        log_frame.grid(row=5, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
+        log_frame = ttk.LabelFrame(self.manual_frame, text="📝 Activity Log", padding="10")
+        log_frame.grid(row=8, column=0, columnspan=3, sticky='ew', padx=20, pady=10)
         
         # Create text widget with scrollbar for logs
         log_text_frame = ttk.Frame(log_frame)
-        log_text_frame.grid(row=0, column=0, sticky='ew', padx=5, pady=5)
+        log_text_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
-        self.log_text = tk.Text(log_text_frame, height=12, width=80, wrap='word')
-        self.log_text.grid(row=0, column=0, sticky='ew')
+        self.log_text = tk.Text(log_text_frame, height=10, width=80, wrap='word', bg=COLOR_DARK, fg=COLOR_WHITE)
+        self.log_text.pack(side='left', fill='both', expand=True)
         
         log_scrollbar = ttk.Scrollbar(log_text_frame, orient="vertical", command=self.log_text.yview)
-        log_scrollbar.grid(row=0, column=1, sticky='ns')
+        log_scrollbar.pack(side='right', fill='y')
         self.log_text.configure(yscrollcommand=log_scrollbar.set)
+        
+        # Initialize multi-tweet variables
+        self.current_tweet_index = 0
+        self.tweets_data = []  # List of {url, content, success, reply_text}
+        self.is_replying = False
+        self.is_paused = False
         
         # Restore state
         self.restore_log_messages()
@@ -1941,3 +2131,495 @@ class YappingPanel(ttk.Frame):
             self.auto_log(f"❌ Error updating search query: {e}", is_error=True)
             import traceback
             traceback.print_exc()
+
+    def on_time_interval_change(self, event=None):
+        """Handle time interval changes"""
+        try:
+            min_interval = int(self.min_interval_entry.get())
+            max_interval = int(self.max_interval_entry.get())
+            if min_interval > max_interval:
+                self.log("⚠️ Min interval cannot be greater than max interval", is_error=True)
+        except ValueError:
+            pass  # Allow partial input
+    
+    def load_urls_from_file(self):
+        """Load tweet URLs from a file named linkstocomment.txt"""
+        file_path = "linkstocomment.txt"
+        try:
+            with open(file_path, "r") as f:
+                urls = [line.strip() for line in f if line.strip()]
+                self.tweet_urls_text.delete('1.0', tk.END)
+                self.tweet_urls_text.insert('1.0', "\n".join(urls))
+                self.log(f"📁 Loaded {len(urls)} URLs from {file_path}")
+            messagebox.showinfo("Success", f"Loaded {len(urls)} URLs from {file_path}")
+        except FileNotFoundError:
+            messagebox.showerror("Error", f"File not found: {file_path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error loading URLs from file: {e}")
+            self.log(f"Error loading URLs from file: {e}", is_error=True)
+    
+    def load_tweet_contents(self):
+        """Load tweet contents for all URLs"""
+        urls_text = self.tweet_urls_text.get('1.0', tk.END).strip()
+        if not urls_text:
+            messagebox.showerror("Error", "Please enter tweet URLs first")
+            return
+        
+        urls = [url.strip() for url in urls_text.split('\n') if url.strip()]
+        if not urls:
+            messagebox.showerror("Error", "No valid URLs found")
+            return
+        
+        self.log(f"🔍 Loading tweet contents for {len(urls)} URLs...")
+        
+        # Start worker thread
+        threading.Thread(target=self._load_tweet_contents_worker, args=(urls,), daemon=True).start()
+    
+    def _load_tweet_contents_worker(self, urls):
+        """Worker thread for loading tweet contents"""
+        try:
+            self.tweets_data = []
+            total_urls = len(urls)
+            
+            # Get first account for scraping
+            selected_accounts = self.get_selected_accounts()
+            if not selected_accounts:
+                self.log("❌ No accounts selected for scraping", is_error=True)
+                return
+            
+            scraping_account = selected_accounts[0]
+            
+            for i, url in enumerate(urls):
+                self.log(f"📝 Loading tweet {i+1}/{total_urls}: {url}")
+                
+                # Scrape tweet content
+                tweet_content, comments, success = scrape_tweet_content_and_comments_with_account(scraping_account, url)
+                
+                tweet_data = {
+                    'url': url,
+                    'content': tweet_content,
+                    'comments': comments,
+                    'success': success,
+                    'reply_text': ''
+                }
+                
+                self.tweets_data.append(tweet_data)
+                
+                # Update progress
+                progress = ((i + 1) / total_urls) * 100
+                self.after(0, lambda p=progress: self._update_progress(p))
+                
+                if success:
+                    self.log(f"✅ Successfully loaded tweet {i+1}/{total_urls}")
+                else:
+                    self.log(f"❌ Failed to load tweet {i+1}/{total_urls}")
+            
+            # Update UI
+            self.after(0, self._update_tweet_display)
+            self.log(f"✅ Completed loading {len(self.tweets_data)} tweets")
+            
+        except Exception as e:
+            self.log(f"❌ Error loading tweet contents: {e}", is_error=True)
+    
+    def _update_progress(self, progress):
+        """Update progress bar"""
+        if self.progress_bar:
+            self.progress_bar['value'] = progress
+        if self.progress_label:
+            self.progress_label.config(text=f"Loading tweets... {progress:.1f}%")
+    
+    def _update_tweet_display(self):
+        """Update the tweet content display"""
+        if not self.tweets_data:
+            self.tweet_content_display.config(state='normal')
+            self.tweet_content_display.delete('1.0', tk.END)
+            self.tweet_content_display.insert('1.0', "No tweets loaded. Click 'Load Tweet Contents' to load tweets.")
+            self.tweet_content_display.config(state='disabled')
+            self.tweet_counter_label.config(text="Tweet 0 of 0")
+            return
+        
+        # Update counter
+        self.tweet_counter_label.config(text=f"Tweet {self.current_tweet_index + 1} of {len(self.tweets_data)}")
+        
+        # Update navigation buttons
+        self.prev_button.config(state='normal' if self.current_tweet_index > 0 else 'disabled')
+        self.next_button.config(state='normal' if self.current_tweet_index < len(self.tweets_data) - 1 else 'disabled')
+        
+        # Display current tweet content
+        current_tweet = self.tweets_data[self.current_tweet_index]
+        self.tweet_content_display.config(state='normal')
+        self.tweet_content_display.delete('1.0', tk.END)
+        
+        if current_tweet['success']:
+            content = f"Tweet Content:\n{current_tweet['content']}\n\n"
+            if current_tweet['comments']:
+                content += f"Comments ({len(current_tweet['comments'])}):\n"
+                for i, comment in enumerate(current_tweet['comments'][:5], 1):  # Show first 5 comments
+                    content += f"{i}. {comment}\n"
+                if len(current_tweet['comments']) > 5:
+                    content += f"... and {len(current_tweet['comments']) - 5} more comments"
+        else:
+            content = f"Failed to load tweet content for: {current_tweet['url']}"
+        
+        self.tweet_content_display.insert('1.0', content)
+        self.tweet_content_display.config(state='disabled')
+        
+        # Load reply text for current tweet
+        self.individual_reply_text.delete('1.0', tk.END)
+        self.individual_reply_text.insert('1.0', current_tweet.get('reply_text', ''))
+    
+    def prev_tweet(self):
+        """Navigate to previous tweet"""
+        if self.current_tweet_index > 0:
+            self._save_current_reply_text()
+            self.current_tweet_index -= 1
+            self._update_tweet_display()
+    
+    def next_tweet(self):
+        """Navigate to next tweet"""
+        if self.current_tweet_index < len(self.tweets_data) - 1:
+            self._save_current_reply_text()
+            self.current_tweet_index += 1
+            self._update_tweet_display()
+    
+    def _save_current_reply_text(self):
+        """Save the current reply text to the tweet data"""
+        if self.tweets_data and 0 <= self.current_tweet_index < len(self.tweets_data):
+            reply_text = self.individual_reply_text.get('1.0', tk.END).strip()
+            self.tweets_data[self.current_tweet_index]['reply_text'] = reply_text
+    
+    def generate_ai_comment_for_current_tweet(self):
+        """Generate AI comment for the current tweet"""
+        if not self.tweets_data or self.current_tweet_index >= len(self.tweets_data):
+            messagebox.showerror("Error", "No tweet selected")
+            return
+        
+        current_tweet = self.tweets_data[self.current_tweet_index]
+        if not current_tweet['success']:
+            messagebox.showerror("Error", "Cannot generate AI comment for failed tweet")
+            return
+        
+        # Get AI prompt
+        custom_prompt = self.ai_prompt_entry.get('1.0', tk.END).strip()
+        if custom_prompt == "Enter your custom instructions for how to reply to the tweet...":
+            custom_prompt = ""
+        
+        self.log(f"🤖 Generating AI comment for tweet {self.current_tweet_index + 1}...")
+        
+        # Start worker thread
+        threading.Thread(target=self._generate_ai_comment_worker, 
+                       args=(current_tweet, custom_prompt), daemon=True).start()
+    
+    def _generate_ai_comment_worker(self, tweet_data, custom_prompt):
+        """Worker thread for generating AI comment"""
+        try:
+            # Get AI provider
+            ai_provider = self.get_current_ai_provider()
+            if not ai_provider:
+                self.after(0, lambda: self.log("❌ No AI provider configured", is_error=True))
+                return
+            
+            # Generate comment
+            comment = self._generate_unique_reply(
+                ai_provider, 
+                tweet_data['content'], 
+                custom_prompt, 
+                "Manual", 
+                tweet_data['url'],
+                50,  # min_chars
+                280  # max_chars
+            )
+            
+            if comment:
+                # Update the reply text
+                self.after(0, lambda: self._update_reply_text(comment))
+                self.after(0, lambda: self.log(f"✅ Generated AI comment: {len(comment)} characters"))
+            else:
+                self.after(0, lambda: self.log("❌ Failed to generate AI comment", is_error=True))
+                
+        except Exception as e:
+            self.after(0, lambda: self.log(f"❌ Error generating AI comment: {e}", is_error=True))
+    
+    def _update_reply_text(self, comment):
+        """Update the reply text with generated comment"""
+        self.individual_reply_text.delete('1.0', tk.END)
+        self.individual_reply_text.insert('1.0', comment)
+        self._save_current_reply_text()
+    
+    def edit_current_comment(self):
+        """Open edit dialog for current comment"""
+        if not self.tweets_data or self.current_tweet_index >= len(self.tweets_data):
+            messagebox.showerror("Error", "No tweet selected")
+            return
+        
+        current_tweet = self.tweets_data[self.current_tweet_index]
+        current_reply = self.individual_reply_text.get('1.0', tk.END).strip()
+        
+        # Create edit dialog
+        edit_dialog = tk.Toplevel(self)
+        edit_dialog.title(f"Edit Reply for Tweet {self.current_tweet_index + 1}")
+        edit_dialog.geometry("600x400")
+        edit_dialog.resizable(True, True)
+        
+        # Center the dialog
+        edit_dialog.transient(self)
+        edit_dialog.grab_set()
+        
+        # Content frame
+        content_frame = ttk.Frame(edit_dialog, padding="10")
+        content_frame.pack(fill='both', expand=True)
+        
+        # Tweet content display
+        ttk.Label(content_frame, text="Tweet Content:", font=('Segoe UI', 10, 'bold')).pack(anchor='w')
+        tweet_display = tk.Text(content_frame, height=6, wrap='word', state='disabled')
+        tweet_display.pack(fill='x', pady=(0, 10))
+        tweet_display.config(state='normal')
+        tweet_display.insert('1.0', current_tweet['content'])
+        tweet_display.config(state='disabled')
+        
+        # Reply text editor
+        ttk.Label(content_frame, text="Your Reply:", font=('Segoe UI', 10, 'bold')).pack(anchor='w')
+        reply_editor = tk.Text(content_frame, height=8, wrap='word')
+        reply_editor.pack(fill='both', expand=True, pady=(0, 10))
+        reply_editor.insert('1.0', current_reply)
+        
+        # Character count
+        char_count_label = ttk.Label(content_frame, text=f"Characters: {len(current_reply)}/280")
+        char_count_label.pack(anchor='w')
+        
+        def update_char_count():
+            text = reply_editor.get('1.0', tk.END).strip()
+            char_count_label.config(text=f"Characters: {len(text)}/280")
+        
+        reply_editor.bind('<KeyRelease>', lambda e: update_char_count())
+        
+        # Buttons
+        button_frame = ttk.Frame(content_frame)
+        button_frame.pack(fill='x', pady=(10, 0))
+        
+        def save_changes():
+            new_reply = reply_editor.get('1.0', tk.END).strip()
+            self.individual_reply_text.delete('1.0', tk.END)
+            self.individual_reply_text.insert('1.0', new_reply)
+            self._save_current_reply_text()
+            self.log(f"✅ Updated reply for tweet {self.current_tweet_index + 1}")
+            edit_dialog.destroy()
+        
+        def cancel_edit():
+            edit_dialog.destroy()
+        
+        ttk.Button(button_frame, text="Save Changes", command=save_changes).pack(side='right', padx=(5, 0))
+        ttk.Button(button_frame, text="Cancel", command=cancel_edit).pack(side='right')
+        
+    def send_reply_for_current_tweet(self):
+        """Send reply for the current tweet"""
+        if not self.tweets_data or self.current_tweet_index >= len(self.tweets_data):
+            messagebox.showerror("Error", "No tweet selected")
+            return
+        
+        selected_accounts = self.get_selected_accounts()
+        if not selected_accounts:
+            messagebox.showerror("Error", "Please select at least one account")
+            return
+        
+        reply_text = self.individual_reply_text.get('1.0', tk.END).strip()
+        if not reply_text:
+            messagebox.showerror("Error", "Please enter a reply text")
+            return
+        
+        current_tweet = self.tweets_data[self.current_tweet_index]
+        
+        self.log(f"📤 Sending reply for tweet {self.current_tweet_index + 1}...")
+        
+        # Start worker thread
+        threading.Thread(target=self._send_single_reply_worker, 
+                       args=(current_tweet, selected_accounts, reply_text), daemon=True).start()
+    
+    def _send_single_reply_worker(self, tweet_data, selected_accounts, reply_text):
+        """Worker thread for sending a single reply"""
+        try:
+            success_count = 0
+            failed_count = 0
+            
+            for account in selected_accounts:
+                try:
+                    # Send reply
+                    success, message = reply_to_tweet(account, tweet_data['url'], reply_text)
+                    
+                    if success:
+                        self.after(0, lambda acc=account: self.log(f"✅ Reply sent successfully with {acc.label}"))
+                        success_count += 1
+                    else:
+                        self.after(0, lambda acc=account, msg=message: self.log(f"❌ Failed to send reply with {acc.label}: {msg}", is_error=True))
+                        failed_count += 1
+                    
+                    # Wait between accounts
+                    if account != selected_accounts[-1]:
+                        wait_time = random.randint(5, 15)
+                        self.after(0, lambda wt=wait_time: self.log(f"⏱️ Waiting {wt} seconds before next account..."))
+                        time.sleep(wait_time)
+                        
+                except Exception as e:
+                    self.after(0, lambda acc=account, err=str(e): self.log(f"❌ Error sending reply with {acc.label}: {err}", is_error=True))
+                    failed_count += 1
+            
+            # Final summary
+            self.after(0, lambda: self.log(f"📊 Reply process completed: {success_count} success, {failed_count} failed"))
+            
+        except Exception as e:
+            self.after(0, lambda: self.log(f"❌ Error in reply worker: {e}", is_error=True))
+    
+    def start_manual_reply_process(self):
+        """Start the manual reply process for all tweets"""
+        if not self.tweets_data:
+            messagebox.showerror("Error", "No tweets loaded. Please load tweet contents first.")
+            return
+        
+        selected_accounts = self.get_selected_accounts()
+        if not selected_accounts:
+            messagebox.showerror("Error", "Please select at least one account")
+            return
+        
+        try:
+            min_interval = int(self.min_interval_entry.get())
+            max_interval = int(self.max_interval_entry.get())
+        except ValueError:
+            messagebox.showerror("Error", "Please enter valid time intervals")
+            return
+        
+        if min_interval > max_interval:
+            messagebox.showerror("Error", "Min interval cannot be greater than max interval")
+            return
+        
+        # Start processing
+        self.is_replying = True
+        self.is_paused = False
+        
+        # Update UI
+        self.start_reply_button.config(state='disabled')
+        self.pause_button.config(state='normal')
+        self.stop_button.config(state='normal')
+        
+        # Start worker thread
+        threading.Thread(target=self._manual_reply_worker, 
+                       args=(selected_accounts, min_interval, max_interval), daemon=True).start()
+    
+    def _manual_reply_worker(self, selected_accounts, min_interval, max_interval):
+        """Worker thread for manual reply process"""
+        try:
+            total_tweets = len(self.tweets_data)
+            processed = 0
+            success_count = 0
+            failed_count = 0
+            
+            self.log(f"🚀 Starting manual reply process with {len(selected_accounts)} accounts")
+            self.log(f"📊 Total tweets to process: {total_tweets}")
+            
+            for i, tweet_data in enumerate(self.tweets_data):
+                if not self.is_replying:
+                    break
+                
+                # Wait if paused
+                while self.is_paused and self.is_replying:
+                    time.sleep(1)
+                
+                if not self.is_replying:
+                    break
+                
+                # Update progress
+                processed += 1
+                progress = (processed / total_tweets) * 100
+                
+                self.after(0, lambda p=progress, proc=processed, succ=success_count, fail=failed_count: 
+                          self._update_manual_progress(p, proc, succ, fail))
+                
+                self.log(f"📝 Processing tweet {processed}/{total_tweets}: {tweet_data['url']}")
+                
+                # Get reply text for this tweet
+                reply_text = tweet_data.get('reply_text', '').strip()
+                if not reply_text:
+                    self.log(f"⏭️ Skipping tweet {processed} - no reply text")
+                    continue
+                
+                # Process with each account
+                for account in selected_accounts:
+                    if not self.is_replying:
+                        break
+                    
+                    try:
+                        success, message = reply_to_tweet(account, tweet_data['url'], reply_text)
+                        
+                        if success:
+                            self.log(f"✅ Reply sent successfully with {account.label}")
+                            success_count += 1
+                        else:
+                            self.log(f"❌ Failed to send reply with {account.label}: {message}", is_error=True)
+                            failed_count += 1
+                        
+                        # Wait between accounts
+                        if account != selected_accounts[-1]:
+                            wait_time = random.randint(min_interval, max_interval)
+                            self.log(f"⏱️ Waiting {wait_time} seconds before next account...")
+                            time.sleep(wait_time)
+                            
+                    except Exception as e:
+                        self.log(f"❌ Error processing with {account.label}: {e}", is_error=True)
+                        failed_count += 1
+                
+                # Wait between tweets
+                if i < len(self.tweets_data) - 1:
+                    wait_time = random.randint(min_interval, max_interval)
+                    self.log(f"⏱️ Waiting {wait_time} seconds before next tweet...")
+                    time.sleep(wait_time)
+            
+            # Final update
+            self.after(0, lambda: self._update_manual_progress(100, processed, success_count, failed_count))
+            self.log(f"✅ Manual reply process completed! Success: {success_count}, Failed: {failed_count}")
+            
+        except Exception as e:
+            self.log(f"❌ Error in manual reply worker: {e}", is_error=True)
+        finally:
+            self.after(0, self.stop_manual_reply_process)
+    
+    def _update_manual_progress(self, progress, processed, success, failed):
+        """Update progress bar and stats for manual reply process"""
+        if self.progress_bar:
+            self.progress_bar['value'] = progress
+        
+        if self.progress_label:
+            self.progress_label.config(text=f"Progress: {processed} tweets processed")
+        
+        if self.stats_label:
+            self.stats_label.config(text=f"Processed: {processed} | Success: {success} | Failed: {failed}")
+    
+    def pause_manual_reply_process(self):
+        """Pause/resume the manual reply process"""
+        if self.is_paused:
+            self.is_paused = False
+            self.pause_button.config(text="⏸️ Pause")
+            self.log("▶️ Manual reply process resumed")
+        else:
+            self.is_paused = True
+            self.pause_button.config(text="▶️ Resume")
+            self.log("⏸️ Manual reply process paused")
+    
+    def stop_manual_reply_process(self):
+        """Stop the manual reply process"""
+        self.is_replying = False
+        self.is_paused = False
+        
+        # Update UI
+        self.start_reply_button.config(state='normal')
+        self.pause_button.config(state='disabled')
+        self.stop_button.config(state='disabled')
+        self.pause_button.config(text="⏸️ Pause")
+        
+        self.log("🛑 Manual reply process stopped")
+
+    def get_selected_accounts(self):
+        """Get selected accounts from listbox"""
+        if not hasattr(self, 'accounts_listbox') or not self.accounts_listbox:
+            return []
+        
+        selected_indices = self.accounts_listbox.curselection()
+        return [self.accounts[i] for i in selected_indices]
